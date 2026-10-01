@@ -1,0 +1,7 @@
+pywebview>=5.1
+apscheduler>=3.10,<4.0
+flask>=3.0
+pystray>=0.19
+pillow>=11.0
+requests>=2.32
+pyobjc-framework-Cocoa>=9.0; sys_platform == "darwin"

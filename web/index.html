@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>TaskDeck · 定时任务管理器</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-logo">
+      <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true">
+        <circle cx="16" cy="17" r="10" fill="none" stroke="#fff" stroke-width="2.2"/>
+        <path d="M16 17V10M16 17h6" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
+        <path d="M11 4h10" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="brand-text">
+      <div class="brand-name">TaskDeck</div>
+      <div class="brand-sub">定时任务管理器</div>
+    </div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="topbar-actions">
+    <button class="btn ghost" id="btnSettings">设置</button>
+    <button class="btn ghost" id="btnTemplates">模板库</button>
+    <button class="btn ghost" id="btnRefresh" title="刷新">刷新</button>
+    <button class="btn primary" id="btnNew">+ 新建任务</button>
+  </div>
+</header>
+
+<main class="layout">
+  <aside class="sidebar">
+    <div class="search-wrap">
+      <input id="search" class="input" type="search" placeholder="搜索任务名 / 命令 / 标签" autocomplete="off">
+    </div>
+    <div class="filters" id="filters">
+      <button class="chip active" data-status="">全部</button>
+      <button class="chip" data-status="enabled">已启用</button>
+      <button class="chip" data-status="disabled">已停用</button>
+      <button class="chip" data-status="failed">最近失败</button>
+    </div>
+    <div class="task-list" id="taskList"></div>
+  </aside>
+
+  <section class="detail">
+    <div class="detail-empty" id="detailEmpty">
+      <div class="empty-icon">⏱️</div>
+      <div class="empty-title">从左侧选择一个任务</div>
+      <div class="empty-sub">或点击右上角「新建任务」/「模板库」快速开始</div>
+    </div>
+
+    <div class="detail-body" id="detailBody" hidden>
+      <div class="detail-head">
+        <div class="detail-title-row">
+          <h2 id="dName">—</h2>
+          <span class="badge" id="dStatus">—</span>
+        </div>
+        <div class="detail-meta" id="dMeta"></div>
+        <div class="detail-actions">
+          <label class="switch" title="启用 / 停用">
+            <input type="checkbox" id="dEnabled">
+            <span class="slider"></span>
+          </label>
+          <button class="btn primary" id="dRun">▶ 立即运行</button>
+          <button class="btn danger-ghost" id="dStop" hidden>■ 终止</button>
+          <button class="btn ghost" id="dEdit">编辑</button>
+          <button class="btn ghost" id="dDelete">删除</button>
+        </div>
+      </div>
+
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-tab="runs">运行日志</button>
+        <button class="tab" data-tab="info">配置</button>
+        <button class="tab" data-tab="env">环境变量</button>
+        <button class="tab" data-tab="notify">通知</button>
+      </div>
+
+      <div class="tab-panel active" data-panel="runs">
+        <div class="runs-layout">
+          <div class="runs-list" id="runsList"></div>
+          <div class="runs-output">
+            <div class="output-head">
+              <span id="outTitle">输出</span>
+              <div class="output-actions">
+                <button class="btn tiny ghost" id="btnCopy">复制</button>
+                <button class="btn tiny ghost" id="btnClearRuns">清空历史</button>
+              </div>
+            </div>
+            <pre class="output" id="outBody">选择左侧一条运行记录查看输出</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-panel="info">
+        <div class="info-grid" id="infoGrid"></div>
+      </div>
+
+      <div class="tab-panel" data-panel="env">
+        <div class="env-table" id="envView"></div>
+      </div>
+
+      <div class="tab-panel" data-panel="notify">
+        <div class="notify-view" id="notifyView"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ===================== 任务编辑弹窗 ===================== -->
+<div class="modal" id="taskModal" hidden>
+  <div class="modal-mask" data-close></div>
+  <div class="modal-dialog wide">
+    <div class="modal-head">
+      <h3 id="taskModalTitle">新建任务</h3>
+      <button class="icon-btn" data-close>×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-section">
+        <div class="form-section-title">基本信息</div>
+        <div class="field">
+          <label>任务名称</label>
+          <input class="input" id="fName" placeholder="例如：每天 9 点抓取百度热搜">
+        </div>
+        <div class="field">
+          <label>执行命令 <span class="req">*</span></label>
+          <textarea class="input mono" id="fCommand" rows="3"
+                    placeholder='例如：python "D:\code\job.py" --mode=fast'></textarea>
+          <div class="hint">在 Windows 上默认通过 cmd 执行；路径含空格请加英文双引号。</div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>工作目录</label>
+            <input class="input mono" id="fCwd" placeholder="留空则使用项目根目录">
+          </div>
+          <div class="field narrow">
+            <label>执行方式</label>
+            <select class="input" id="fShell">
+              <option value="1">通过 Shell（cmd / sh）</option>
+              <option value="0">直接执行（不经过 Shell）</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label>标签</label>
+          <input class="input" id="fTags" placeholder="多个用逗号分隔，例如：抓取,钉钉">
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">调度</div>
+        <div class="field-row">
+          <div class="field narrow">
+            <label>类型</label>
+            <select class="input" id="fSchedType">
+              <option value="interval">固定间隔</option>
+              <option value="cron">Cron 表达式</option>
+              <option value="once">仅执行一次</option>
+            </select>
+          </div>
+          <div class="field" id="intervalWrap">
+            <label>间隔</label>
+            <div class="inline-field">
+              <input class="input" id="fInterval" type="number" min="1" value="60">
+              <select class="input" id="fIntervalUnit">
+                <option value="1">秒</option>
+                <option value="60" selected>分钟</option>
+                <option value="3600">小时</option>
+                <option value="86400">天</option>
+              </select>
+            </div>
+          </div>
+          <div class="field" id="cronWrap" hidden>
+            <label>Cron 表达式（分 时 日 月 周）</label>
+            <input class="input mono" id="fCron" placeholder="0 9 * * *">
+          </div>
+          <div class="field" id="onceWrap" hidden>
+            <label>执行时间</label>
+            <input class="input" id="fOnce" type="datetime-local">
+          </div>
+        </div>
+        <div class="cron-helper" id="cronHelper" hidden>
+          <span class="chips-label">常用：</span>
+          <button type="button" class="cron-chip" data-cron="*/5 * * * *">每 5 分钟</button>
+          <button type="button" class="cron-chip" data-cron="0 * * * *">每小时整点</button>
+          <button type="button" class="cron-chip" data-cron="0 9 * * *">每天 9:00</button>
+          <button type="button" class="cron-chip" data-cron="30 8 * * 1-5">工作日 8:30</button>
+          <button type="button" class="cron-chip" data-cron="0 9 * * 1">每周一 9:00</button>
+          <button type="button" class="cron-chip" data-cron="0 9 1 * *">每月 1 日 9:00</button>
+        </div>
+        <div class="schedule-preview" id="schedPreview"></div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">执行控制</div>
+        <div class="field-row">
+          <div class="field narrow">
+            <label>超时（秒）</label>
+            <input class="input" id="fTimeout" type="number" min="0" value="300">
+            <div class="hint">0 = 不限制</div>
+          </div>
+          <div class="field narrow">
+            <label>失败重试次数</label>
+            <input class="input" id="fRetries" type="number" min="0" value="0">
+          </div>
+          <div class="field narrow">
+            <label>重试间隔（秒）</label>
+            <input class="input" id="fRetryDelay" type="number" min="0" value="30">
+          </div>
+        </div>
+        <label class="checkbox">
+          <input type="checkbox" id="fEnabled" checked> 创建后立即启用
+        </label>
+        <div class="field">
+          <label>成功后执行 <span class="opt">可选 · 仅定时调度触发</span></label>
+          <input class="input mono" id="fAfterSuccess"
+                 placeholder="如：shutdown /s /t 60（定时运行成功且其他任务全部结束后执行）">
+          <div class="hint">仅在任务最终成功（含重试）后触发一次；中途取消可用 shutdown /a 撤销关机</div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">环境变量 <span class="opt">可选</span></div>
+        <div id="envRows"></div>
+        <button class="btn tiny ghost" id="btnAddEnv" type="button">+ 添加变量</button>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">通知 <span class="opt">可选</span></div>
+        <div class="field-row">
+          <div class="field narrow">
+            <label>任务结束后</label>
+            <select class="input" id="fNotifyOn">
+              <option value="never">不通知</option>
+              <option value="failure">仅在失败时</option>
+              <option value="always">总是通知</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label>钉钉机器人 Webhook</label>
+          <input class="input mono" id="fWebhook"
+                 placeholder="https://oapi.dingtalk.com/robot/send?access_token=...">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>加签密钥（安全设置为「加签」时填写）</label>
+            <input class="input mono" id="fSecret" placeholder="SEC...">
+          </div>
+          <div class="field narrow">
+            <label>@所有人</label>
+            <select class="input" id="fAtAll">
+              <option value="0">否</option>
+              <option value="1">是</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn tiny ghost" id="btnTestNotify" type="button">发送测试消息</button>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">备注 <span class="opt">可选</span></div>
+        <textarea class="input" id="fNote" rows="2" placeholder="这个任务是做什么的？"></textarea>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" data-close>取消</button>
+      <button class="btn primary" id="btnSaveTask">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 模板弹窗 ===================== -->
+<div class="modal" id="tplModal" hidden>
+  <div class="modal-mask" data-close></div>
+  <div class="modal-dialog">
+    <div class="modal-head">
+      <h3>模板库</h3>
+      <button class="icon-btn" data-close>×</button>
+    </div>
+    <div class="modal-body">
+      <div class="tpl-list" id="tplList"></div>
+      <div class="tpl-form" id="tplForm" hidden>
+        <div class="tpl-form-head">
+          <button class="btn tiny ghost" id="btnBackTpl">← 返回</button>
+          <h4 id="tplName"></h4>
+        </div>
+        <div class="field">
+          <label>任务名称</label>
+          <input class="input" id="tplTaskName">
+        </div>
+        <div class="field-row">
+          <div class="field narrow">
+            <label>调度类型</label>
+            <select class="input" id="tplSchedType">
+              <option value="interval">固定间隔</option>
+              <option value="cron">Cron 表达式</option>
+              <option value="once">仅执行一次</option>
+            </select>
+          </div>
+          <div class="field" id="tplIntervalWrap">
+            <label>间隔</label>
+            <div class="inline-field">
+              <input class="input" id="tplInterval" type="number" min="1" value="60">
+              <select class="input" id="tplIntervalUnit">
+                <option value="1">秒</option>
+                <option value="60" selected>分钟</option>
+                <option value="3600">小时</option>
+                <option value="86400">天</option>
+              </select>
+            </div>
+          </div>
+          <div class="field" id="tplCronWrap" hidden>
+            <label>Cron 表达式</label>
+            <input class="input mono" id="tplCron" placeholder="0 9 * * *">
+          </div>
+          <div class="field" id="tplOnceWrap" hidden>
+            <label>执行时间</label>
+            <input class="input" id="tplOnce" type="datetime-local">
+          </div>
+        </div>
+        <div id="tplFields"></div>
+        <div class="tpl-preview">
+          <div class="hint">将自动生成的命令：</div>
+          <code id="tplCommand"></code>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot" id="tplFoot" hidden>
+      <button class="btn ghost" data-close>取消</button>
+      <button class="btn primary" id="btnCreateTpl">创建任务</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+
+<!-- ===================== 全局设置弹窗 ===================== -->
+<div class="modal" id="settingsModal" hidden>
+  <div class="modal-mask" data-close></div>
+  <div class="modal-dialog">
+    <div class="modal-head">
+      <h3>全局设置</h3>
+      <button class="icon-btn" data-close>×</button>
+    </div>
+    <div class="modal-body">
+      <div class="section-title">钉钉群机器人（全局默认）</div>
+      <div class="hint" style="margin-bottom:10px;">任务没有单独配置通知时，用这里的机器人发送任务结果通知；任务自己配了则以任务的为准。</div>
+      <label class="checkbox">
+        <input type="checkbox" id="sDingEnabled"> 启用全局钉钉通知
+      </label>
+      <div class="field">
+        <label>Webhook 地址</label>
+        <input class="input mono" id="sWebhook"
+               placeholder="https://oapi.dingtalk.com/robot/send?access_token=...">
+      </div>
+      <div class="field">
+        <label>加签密钥 <span class="opt">SEC 开头，可空</span></label>
+        <input class="input mono" id="sSecret" placeholder="SECxxxxxxxx">
+      </div>
+      <div class="field">
+        <label>通知时机</label>
+        <select class="input" id="sOn">
+          <option value="always" selected>总是通知（成功/失败都发）</option>
+          <option value="failure">仅在失败时通知</option>
+        </select>
+      </div>
+      <label class="checkbox">
+        <input type="checkbox" id="sAtAll"> 通知时 @所有人
+      </label>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" id="btnSettingsTest">发送测试消息</button>
+      <div style="flex:1"></div>
+      <button class="btn ghost" data-close>取消</button>
+      <button class="btn primary" id="btnSettingsSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
